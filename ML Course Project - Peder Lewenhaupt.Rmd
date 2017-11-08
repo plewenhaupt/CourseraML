@@ -1,0 +1,105 @@
+---
+title: "Practical Machine Learning - Course Project"
+author: "Peder Lewenhaupt"
+date: "6 november 2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+#Introduction
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, the goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants, to predict how an exercise was performed: (Class A), throwing the elbows to the front (Class B), lifting the dumbbell only halfway (Class C), lowering the dumbbell only halfway (Class D) and throwing the hips to the front (Class E). Only Class A corresponds to correct performance. 
+
+
+
+#1. Load libraries and  data
+ 
+```{r}
+options(warn = -1)
+library(caret)
+library(randomForest)
+library(rpart)
+library(rattle)
+set.seed(2017)
+
+trainUrl <- "http://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+testUrl <- "http://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+
+
+training <- read.csv(url(trainUrl))
+testing <- read.csv(url(testUrl))
+```
+
+#2. Exploration and cleaning
+
+Using exploratory functions (str(), dim()) showed some preliminary issues with the data. Firstly, there seemed to be some variables with a large amount of missing data. Secondly, some of the variables seemed to have strange data, such as a "#DIV/0" value. To prepare the data for modelling, these variables needed to be handled. The exploratory analysis also showed that many variables also had no meaningful data, and could thus be removed completely. Additionally, some variables would not be relevant for other reasons, e.g. the timestamps. 
+
+```{r}
+training1 = training[,c(8:11,37:49,60:68,84:86,102,113:124,140,151:160)]
+```
+
+Next, the training data was partitioned into a training and validation set (70% training, 30% validation).
+
+```{r}
+train_partition = createDataPartition(training1$classe, p = 0.7, list = FALSE)
+train = training1[train_partition, ]
+valid = training1[-train_partition, ]
+```
+
+#3. Model building
+Three methods were used to find a reasonably accurate prediction model: Decision trees, boosted regression and random forests. 
+
+First, decision trees with cross validation:
+```{r}
+decTreeCtrl <- trainControl(method = "repeatedcv", number = 10, repeats = 3)
+
+dtree_fit <- train(classe ~., data = train, method = "rpart", trControl = decTreeCtrl, tuneLength = 10)
+
+predictionDTree <- predict(dtree_fit, valid)
+
+cmDTree <- confusionMatrix(predictionDTree, valid$classe)
+cmDTree
+```
+As shown, the accuracy of this method is around 67%, i.e. not very accurate. 
+
+Next, boosted regression:
+```{r}
+set.seed(2016)
+BRCtrl <- trainControl(method = "repeatedcv", number = 5, repeats = 1)
+
+gbmFit <- train(classe ~ ., data=train, method = "gbm",trControl = BRCtrl)
+
+gbmPred <- predict(gbmFit, newdata=valid)
+
+cmGbm <- confusionMatrix(gbmPred, valid$classe)
+cmGbm
+```
+
+Here, the accuracy is much higher, 96%.
+
+Lastly, random forests:
+```{r}
+set.seed(2015)
+
+rfFit <- randomForest(classe ~ ., data=train)
+
+rfPred <- predict(rfFit, newdata=valid, type = "class")
+
+cmrf <- confusionMatrix(rfPred, valid$classe)
+cmrf
+```
+
+The random forest method proved to be 99.6% accurate, thus being the most accurate of the three. 
+
+#4. Model testing
+The random forest model was used to predict on the testing data, yielding the following predictions:
+
+
+```{r}
+testPred <- predict(rfFit, newdata=testing)
+
+testPred
+```
+
+These predictions were 100% accurate in the quiz. 
